@@ -14,7 +14,6 @@ reassignment, and QR-coded e-tickets delivered by email.
 | Component | URL |
 |---|---|
 | **Live site** | `https://ticket-booking-system-pearl.vercel.app` |
-| **API** | `https://ticket-booking-api.onrender.com` *(replace with your actual Render URL)* |
 | **API health check** | `https://ticket-booking-api.onrender.com/health` |
 
 > ⚠️ The backend is hosted on Render's free tier, which sleeps after 15 minutes
