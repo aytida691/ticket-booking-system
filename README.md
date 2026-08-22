@@ -13,7 +13,7 @@ reassignment, and QR-coded e-tickets delivered by email.
 
 | Component | URL |
 |---|---|
-| **Live site** | `https://ticket-booking-system.vercel.app` *(replace with your actual Vercel URL)* |
+| **Live site** | `https://ticket-booking-system-pearl.vercel.app` |
 | **API** | `https://ticket-booking-api.onrender.com` *(replace with your actual Render URL)* |
 | **API health check** | `https://ticket-booking-api.onrender.com/health` |
 
