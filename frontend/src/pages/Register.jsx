@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Same rule as the backend: requires a real domain + TLD (rejects "a@b").
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -11,6 +14,10 @@ export default function Register() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!EMAIL_REGEX.test(form.email)) {
+      setError('Please enter a valid email address (e.g. name@example.com)');
+      return;
+    }
     try {
       const user = await register(form.name, form.email, form.password, form.role);
       navigate(user.role === 'organiser' ? '/organiser' : '/');
