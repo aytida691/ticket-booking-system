@@ -2,31 +2,21 @@ const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { signToken } = require('../utils/jwt');
 
-// Requires: local-part @ domain-label(s) . TLD(2+ letters)
-// Rejects things like "a@b" (no dot / TLD) while allowing normal addresses,
-// including subdomains and +tags (e.g. name+tag@sub.example.co.in).
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
-
-function isValidEmail(email) {
-  return typeof email === 'string' && email.length <= 254 && EMAIL_REGEX.test(email);
-}
-
 async function register(req, res, next) {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email, password are required' });
     }
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'Please enter a valid email address (e.g. name@example.com)' });
-    }
     // Only allow self-registration as customer or organiser; admin accounts
     // are provisioned manually / seeded, never via the public endpoint.
     const allowedRole = role === 'organiser' ? 'organiser' : 'customer';
+
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length) {
       return res.status(409).json({ error: 'Email already registered' });
     }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
       `INSERT INTO users (name, email, password_hash, role)
@@ -47,8 +37,10 @@ async function login(req, res, next) {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     const user = result.rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
     const token = signToken(user);
     res.json({
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
