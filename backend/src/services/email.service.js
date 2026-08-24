@@ -69,22 +69,4 @@ async function sendWaitlistOffer({ to, customerName, eventTitle, showDate, showT
   });
 }
 
-/**
- * Sends the email verification code used before an account can be created.
- */
-async function sendOtpEmail({ to, code, ttlMinutes }) {
-  const transporter = buildTransport();
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to,
-    subject: `Your verification code: ${code}`,
-    html: `
-      <h2>Verify your email</h2>
-      <p>Your verification code is:</p>
-      <p style="font-size:32px;font-weight:700;letter-spacing:6px;">${code}</p>
-      <p>This code expires in ${ttlMinutes} minutes. If you didn't request this, you can safely ignore this email.</p>
-    `,
-  });
-}
-
-module.exports = { sendBookingConfirmation, sendWaitlistOffer, sendOtpEmail };
+module.exports = { sendBookingConfirmation, sendWaitlistOffer };
