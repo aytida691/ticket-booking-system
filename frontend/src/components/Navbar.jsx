@@ -16,6 +16,7 @@ export default function Navbar() {
         <Link to="/" className="brand">🎟️ TicketBooking</Link>
         <Link to="/">Events</Link>
         {user?.role === 'organiser' && <Link to="/organiser">Organiser</Link>}
+        {user?.role === 'organiser' && <Link to="/organiser/events">My Events</Link>}
         {user?.role === 'organiser' && <Link to="/organiser/create-event">+ New Event</Link>}
         {user?.role === 'admin' && <Link to="/admin/venues">Venues</Link>}
         {user?.role === 'customer' && <Link to="/my-bookings">My Bookings</Link>}

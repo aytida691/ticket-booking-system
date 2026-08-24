@@ -76,4 +76,35 @@ async function getVenue(req, res, next) {
   }
 }
 
-module.exports = { createVenue, listVenues, getVenue };
+/**
+ * Deletes a venue, but only if no show has ever been scheduled there —
+ * a venue with shows (past or upcoming) is load-bearing for booking
+ * history, so deletion is blocked with a clear error instead of silently
+ * cascading. A brand-new venue that was created by mistake, with no
+ * shows yet, can be deleted freely; ON DELETE CASCADE on seat_categories
+ * and venue_seats handles cleanup of the seat layout automatically.
+ */
+async function deleteVenue(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const venueCheck = await pool.query('SELECT * FROM venues WHERE id = $1', [id]);
+    if (!venueCheck.rows.length) {
+      return res.status(404).json({ error: 'Venue not found' });
+    }
+
+    const showCount = await pool.query('SELECT COUNT(*) FROM shows WHERE venue_id = $1', [id]);
+    if (Number(showCount.rows[0].count) > 0) {
+      return res.status(409).json({
+        error: `Cannot delete this venue — it has ${showCount.rows[0].count} show(s) scheduled (past or upcoming).`,
+      });
+    }
+
+    await pool.query('DELETE FROM venues WHERE id = $1', [id]);
+    res.json({ message: 'Venue deleted', venueId: Number(id) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { createVenue, listVenues, getVenue, deleteVenue };

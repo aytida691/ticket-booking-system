@@ -144,6 +144,23 @@ CREATE TABLE waitlist_entries (
 
 CREATE INDEX idx_waitlist_queue ON waitlist_entries (show_id, category_id, status, joined_at);
 
+-- ---------------------------------------------------------------
+-- Email OTP verification — required before an account can be
+-- created. One row per OTP request; consumed once used successfully.
+-- ---------------------------------------------------------------
+CREATE TABLE otp_verifications (
+    id            SERIAL PRIMARY KEY,
+    email         VARCHAR(160) NOT NULL,
+    otp_hash      VARCHAR(255) NOT NULL,
+    purpose       VARCHAR(30) NOT NULL DEFAULT 'register',
+    attempts      INT NOT NULL DEFAULT 0,
+    consumed      BOOLEAN NOT NULL DEFAULT false,
+    expires_at    TIMESTAMPTZ NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_otp_email_purpose ON otp_verifications (email, purpose, consumed, created_at DESC);
+
 -- ============================================================
 -- Notes:
 -- * Seat hold / booking concurrency is handled with a single atomic

@@ -17,8 +17,13 @@ export function AuthProvider({ children }) {
     return data.user;
   }
 
-  async function register(name, email, password, role) {
-    const { data } = await api.post('/auth/register', { name, email, password, role });
+  async function sendOtp(email) {
+    const { data } = await api.post('/auth/send-otp', { email });
+    return data;
+  }
+
+  async function register(name, email, password, role, otp) {
+    const { data } = await api.post('/auth/register', { name, email, password, role, otp });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
@@ -32,7 +37,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, login, register, logout, sendOtp }}>
       {children}
     </AuthContext.Provider>
   );

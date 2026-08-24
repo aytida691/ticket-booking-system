@@ -11,6 +11,7 @@ import BookingHistory from './pages/BookingHistory';
 import MyWaitlist from './pages/MyWaitlist';
 import WaitlistOffer from './pages/WaitlistOffer';
 import OrganiserDashboard from './pages/OrganiserDashboard';
+import OrganiserEvents from './pages/OrganiserEvents';
 import CreateEvent from './pages/CreateEvent';
 import AdminVenues from './pages/AdminVenues';
 
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/my-waitlist" element={<Protected role="customer"><MyWaitlist /></Protected>} />
 
         <Route path="/organiser" element={<Protected role="organiser"><OrganiserDashboard /></Protected>} />
+        <Route path="/organiser/events" element={<Protected role="organiser"><OrganiserEvents /></Protected>} />
         <Route path="/organiser/create-event" element={<Protected role="organiser"><CreateEvent /></Protected>} />
 
         <Route path="/admin/venues" element={<Protected role="admin"><AdminVenues /></Protected>} />

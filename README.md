@@ -2,11 +2,24 @@
 
 A full-stack ticket booking platform for movies and concerts: visual seat maps,
 TTL-based seat holds with auto-release, waitlists with automatic seat
-reassignment, and QR-coded e-tickets delivered by email — built end-to-end
-and smoke-tested against a real PostgreSQL database (see "How this was
-tested" below).
+reassignment, and QR-coded e-tickets delivered by email.
 
-**Stack:** Node.js/Express · PostgreSQL · Socket.io · React (Vite) · Nodemailer · `qrcode`
+**Stack:** Node.js/Express · PostgreSQL (Neon) · Socket.io · React (Vite) · Nodemailer · `qrcode`
+**Hosting:** Backend on Render · Frontend on Vercel · Database on Neon
+
+---
+
+## 🔗 Live Deployment
+
+| Component | URL |
+|---|---|
+| **Live site** | `https://ticket-booking-system.vercel.app` *(replace with your actual Vercel URL)* |
+| **API** | `https://ticket-booking-api.onrender.com` *(replace with your actual Render URL)* |
+| **API health check** | `https://ticket-booking-api.onrender.com/health` |
+
+> ⚠️ The backend is hosted on Render's free tier, which sleeps after 15 minutes
+> of inactivity. The first request after a period of no traffic may take
+> 30–60 seconds to respond while it wakes up — this is expected, not a bug.
 
 ---
 
@@ -16,78 +29,172 @@ tested" below).
 ticket-booking-system/
 ├── backend/
 │   ├── server.js                     # Express app entrypoint
+│   ├── package.json
 │   ├── .env.example
 │   └── src/
-│       ├── config/                   # DB pool, Socket.io setup
-│       ├── db/schema.sql             # Full Postgres schema (source of truth)
-│       ├── db/migrate.js             # Applies schema.sql -> npm run migrate
-│       ├── middleware/                # JWT auth, role guard, error handler
-│       ├── routes/                    # Express routers (thin, one per resource)
-│       ├── controllers/               # Business logic
-│       └── services/                  # QR generation, email, waitlist logic, cron sweepers
+│       ├── config/
+│       │   ├── db.js                 # PostgreSQL connection pool
+│       │   └── socket.js             # Socket.io setup + broadcast helper
+│       ├── db/
+│       │   ├── schema.sql            # Full Postgres schema (source of truth)
+│       │   └── migrate.js            # Applies schema.sql -> npm run migrate
+│       ├── middleware/
+│       │   ├── auth.js               # JWT auth + role-based access guard
+│       │   └── errorHandler.js
+│       ├── routes/                   # Express routers (one per resource)
+│       │   ├── auth.routes.js
+│       │   ├── venue.routes.js
+│       │   ├── event.routes.js
+│       │   ├── show.routes.js
+│       │   ├── booking.routes.js
+│       │   ├── waitlist.routes.js
+│       │   └── organiser.routes.js
+│       ├── controllers/              # Business logic
+│       │   ├── auth.controller.js
+│       │   ├── venue.controller.js
+│       │   ├── event.controller.js
+│       │   ├── show.controller.js
+│       │   ├── booking.controller.js
+│       │   ├── waitlist.controller.js
+│       │   └── organiser.controller.js
+│       ├── services/
+│       │   ├── qr.service.js         # QR code generation
+│       │   ├── email.service.js      # Booking + waitlist offer emails
+│       │   ├── waitlist.service.js   # Shared waitlist auto-assignment logic
+│       │   ├── holdExpiry.job.js     # Cron: sweeps expired seat holds
+│       │   └── waitlistOffer.job.js  # Cron: sweeps expired waitlist offers
+│       └── utils/
+│           └── jwt.js
 └── frontend/
+    ├── index.html
+    ├── package.json
+    ├── vite.config.js
     ├── .env.example
     └── src/
+        ├── main.jsx
+        ├── App.jsx                   # Routes + role-based route guards
         ├── api/api.js                 # axios instance (attaches JWT)
         ├── socket.js                  # Socket.io client
         ├── context/AuthContext.jsx
-        ├── pages/                     # One file per screen
-        └── components/                # SeatGrid, Timer, Navbar
+        ├── components/
+        │   ├── Navbar.jsx
+        │   ├── SeatGrid.jsx
+        │   └── Timer.jsx
+        ├── pages/
+        │   ├── Login.jsx
+        │   ├── Register.jsx
+        │   ├── EventList.jsx
+        │   ├── EventDetail.jsx
+        │   ├── ShowSeatMap.jsx        # Core booking UI: live seat map, hold, checkout
+        │   ├── BookingHistory.jsx
+        │   ├── MyWaitlist.jsx
+        │   ├── WaitlistOffer.jsx      # Destination of the emailed claim link
+        │   ├── OrganiserDashboard.jsx
+        │   ├── CreateEvent.jsx
+        │   └── AdminVenues.jsx
+        └── styles.css
 ```
 
 ---
 
-## 2. Setup Guide
+## 2. Running Locally
 
 ### Prerequisites
 - Node.js 18+
-- PostgreSQL 14+ (local install, Docker, or a hosted instance — Render/Railway/Neon/Supabase all work)
-- An SMTP account for sending email. Easiest free options: a Gmail account with an
-  [App Password](https://myaccount.google.com/apppasswords), or a free-tier transactional
-  email service (Mailtrap for testing, Brevo/Resend for real delivery).
+- A PostgreSQL database — local install, or a free cloud instance (Neon, Supabase, Render Postgres)
+- An SMTP account for sending email (Gmail App Password, Mailtrap, Brevo, Resend, etc.)
 
 ### Backend
 
 ```bash
 cd backend
-cp .env.example .env      # then fill in DATABASE_URL, JWT_SECRET, SMTP_* etc.
+cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, SMTP_* — see §4
 npm install
 npm run migrate           # creates all tables from src/db/schema.sql
-npm run dev                # starts on http://localhost:5000 (nodemon, auto-reload)
-# or: npm start            # production start
+npm run dev                # http://localhost:5000 (nodemon, auto-reload)
 ```
 
-`npm run migrate` is idempotent-unsafe by design (it's a straight `schema.sql`
-apply, not a migration framework) — run it once against a fresh database.
-If you need to re-run it, drop and recreate the database first, or manually
-`DROP TABLE ... CASCADE` before rerunning.
-
 ### Frontend
+
+Open a second terminal:
 
 ```bash
 cd frontend
 cp .env.example .env      # point VITE_API_URL / VITE_SOCKET_URL at your backend
 npm install
-npm run dev                # starts on http://localhost:5173
+npm run dev                # http://localhost:5173
 ```
 
 ### Creating the first admin account
-Public registration only allows `customer` or `organiser` roles (see
-`auth.controller.js`) — admin accounts are provisioned directly in the
-database, which is standard practice for a role that manages physical venue
-infrastructure:
+
+Public registration requires email verification (OTP) first — see §12 below
+— and only allows `customer` or `organiser` roles. Admin accounts are
+provisioned directly in the database, since that role manages physical
+venue infrastructure and shouldn't be self-serve:
 
 ```sql
 UPDATE users SET role = 'admin' WHERE email = 'you@example.com';
 ```
-(Register a normal account first, then promote it with the query above.)
+Register a normal account first, run this against your database, then log
+out and back in on the site.
 
 ---
 
-## 3. Environment Variables
+## 3. Deployment (how the live version above was set up)
+
+This project is deployed across three free-tier services. Steps to reproduce:
+
+### 3a. Database — Neon
+
+1. Sign up at [neon.tech](https://neon.tech), create a project
+2. Copy the connection string it provides (includes `?sslmode=require`)
+3. Use it as `DATABASE_URL` in both local `.env` (temporarily, to run the
+   migration) and in Render's environment variables (permanently)
+
+### 3b. Backend — Render
+
+1. Push the repo to GitHub (public, `main` branch)
+2. On [render.com](https://render.com): **New → Web Service** → connect the repo
+3. Settings:
+   - Root Directory: `backend`
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+4. Add all environment variables from `backend/.env.example` (see §4) —
+   `CLIENT_ORIGIN` and `APP_BASE_URL` can be added once the Vercel URL exists
+5. Deploy, then confirm `https://<your-render-url>/health` returns `{"status":"ok"}`
+
+**Applying the schema to Neon:** Render's free tier doesn't include Shell
+access. Instead, run the migration from your own machine by temporarily
+pointing local `backend/.env`'s `DATABASE_URL` at the Neon string and
+running `npm run migrate` — this applies `schema.sql` to Neon directly, no
+Render shell required. (Alternatively, paste `schema.sql`'s contents into
+Neon's own SQL Editor and run it there.)
+
+### 3c. Frontend — Vercel
+
+1. On [vercel.com](https://vercel.com): **Add New → Project** → import the same repo
+2. Root Directory: `frontend` (Framework auto-detects as Vite)
+3. Environment variables:
+   - `VITE_API_URL` = `https://<your-render-url>/api`
+   - `VITE_SOCKET_URL` = `https://<your-render-url>`
+4. Deploy — Vercel provides the live frontend URL
+
+### 3d. Connect them (CORS)
+
+Back in Render → Environment tab, set:
+- `CLIENT_ORIGIN` = your Vercel URL
+- `APP_BASE_URL` = your Vercel URL
+
+Save — Render redeploys automatically. Without this, the browser blocks API
+calls from the deployed frontend, and waitlist offer emails would link to
+the wrong place.
+
+---
+
+## 4. Environment Variables
 
 ### `backend/.env.example`
-```
+```env
 PORT=5000
 NODE_ENV=development
 CLIENT_ORIGIN=http://localhost:5173
@@ -112,43 +219,45 @@ EMAIL_FROM="Ticket Booking <no-reply@ticketbooking.com>"
 APP_BASE_URL=http://localhost:5173
 ```
 
+> For Gmail, `SMTP_PASS` must be a 16-character **App Password**
+> (myaccount.google.com/apppasswords), not your normal login password.
+
 ### `frontend/.env.example`
-```
+```env
 VITE_API_URL=http://localhost:5000/api
 VITE_SOCKET_URL=http://localhost:5000
 ```
 
 ---
 
-## 4. Database Schema (summary — full DDL in `backend/src/db/schema.sql`)
+## 5. Database Schema (summary — full DDL in `backend/src/db/schema.sql`)
 
-| Table              | Purpose |
-|---------------------|---------|
-| `users`              | customer / organiser / admin, role-based auth |
-| `venues`             | admin-managed venue with a `rows × cols` layout |
-| `seat_categories`    | e.g. Premium / Standard, mapped to a row range within a venue |
-| `venue_seats`        | physical seat inventory for a venue (reused across all its shows) |
-| `events`             | movie/concert listing (owned by an organiser) |
-| `shows`              | a specific date/time/venue instance of an event |
-| `show_pricing`       | per-category price for a given show |
-| **`show_seats`**     | **one row per seat per show** — the row that gets atomically locked for hold/booking (see §5) |
+| Table | Purpose |
+|---|---|
+| `users` | customer / organiser / admin, role-based auth |
+| `venues` | admin-managed venue with a `rows × cols` layout |
+| `seat_categories` | e.g. Premium / Standard, mapped to a row range within a venue |
+| `venue_seats` | physical seat inventory for a venue (reused across all its shows) |
+| `events` | movie/concert listing (owned by an organiser) |
+| `shows` | a specific date/time/venue instance of an event |
+| `show_pricing` | per-category price for a given show |
+| **`show_seats`** | **one row per seat per show** — the row atomically locked for hold/booking (see §6) |
 | `bookings` / `booking_seats` | confirmed/cancelled bookings and the seats they cover |
-| `waitlist_entries`   | queue per (show, category); tracks offer token + expiry |
+| `waitlist_entries` | queue per (show, category); tracks offer token + expiry |
 
-`show_seats` is deliberately denormalized from `venue_seats`: a seat's
-availability is scoped to one show, so two different shows at the same venue
-have completely independent seat maps even though they share the same
-physical layout.
+`show_seats` is deliberately denormalized from `venue_seats`: availability is
+scoped to one show, so two different shows at the same venue have fully
+independent seat maps even though they share the same physical layout.
 
 ---
 
-## 5. Seat Hold, TTL & Concurrency — how it actually works
+## 6. Seat Hold, TTL & Concurrency
 
-**The core problem:** two customers click the same seat within milliseconds
-of each other. Exactly one must win; the loser must get a clean, immediate
-"unavailable" response — never a stuck UI, a double-booking, or a lost hold.
+**The problem:** two customers click the same seat within milliseconds of
+each other — exactly one must win, and the loser must get an immediate,
+correct "unavailable" response.
 
-**The mechanism (compare-and-swap via a single atomic UPDATE):**
+**The mechanism** — a single atomic compare-and-swap `UPDATE`:
 
 ```sql
 UPDATE show_seats
@@ -157,165 +266,164 @@ WHERE id = $seatId AND status = 'available'
 RETURNING id;
 ```
 
-Postgres guarantees this single-statement `UPDATE ... WHERE` is atomic. If
-two requests race for the same row, Postgres serializes them internally —
-only one `UPDATE` actually matches `status = 'available'` and returns a row
-(`rowCount = 1`); the other returns `rowCount = 0`. No explicit
-`SELECT ... FOR UPDATE` locking is needed for a single seat, which keeps the
-common path fast.
+Postgres executes this atomically at the row level. If two requests race
+for the same row, only one `UPDATE` matches `status='available'` and
+returns a row (`rowCount = 1`); the loser gets `rowCount = 0`. No explicit
+locking needed for a single seat. For multi-seat holds, each seat in the
+batch is claimed with this same CAS inside one transaction — if any seat
+fails, the whole hold rolls back, so a customer never ends up holding a
+random subset of what they selected.
 
-For **multi-seat holds**, each seat in the request is claimed with this same
-CAS inside one transaction. If *any* seat in the batch fails (`rowCount = 0`),
-the whole transaction is rolled back — the customer never ends up holding a
-random subset of what they selected (see `holdSeats` in
-`booking.controller.js`).
-
-**TTL enforcement is layered, not single-point-of-failure:**
-1. **Lazy expiry** — every read of the seat map, every hold attempt, and
-   every checkout first runs `UPDATE show_seats SET status='available' ...
-   WHERE status='held' AND held_until < now()`. This guarantees correctness
-   even if the sweeper below hasn't run yet.
-2. **Active sweeper** (`holdExpiry.job.js`) — a `setInterval` every
-   `HOLD_SWEEP_INTERVAL_SECONDS` (default 15s) proactively releases expired
-   holds and broadcasts the change over Socket.io, so seats free up in
-   real time for everyone viewing the seat map — not just the next person
-   who happens to hit an API endpoint.
+**TTL enforcement is layered:**
+1. **Lazy expiry** — every seat-map read, hold attempt, and checkout first
+   flips any `held` seat past its `held_until` back to `available`.
+2. **Active sweeper** (`holdExpiry.job.js`) — runs every
+   `HOLD_SWEEP_INTERVAL_SECONDS` (default 15s), releases expired holds
+   proactively, and broadcasts the change over Socket.io so seats free up
+   live for everyone viewing that seat map.
 
 **Checkout** only succeeds if the requesting customer currently holds the
-seat *and* the hold hasn't expired (`status='held' AND held_by=$user AND
-held_until > now()`), verified inside a `FOR UPDATE`-locked transaction —
-this is what makes "abandon checkout → auto-release → seat re-listed" safe:
-an abandoned hold simply ages out and can never be converted into a booking
-after expiry.
+seat and the hold hasn't expired, verified inside a `FOR UPDATE`-locked
+transaction — this is what makes "abandon checkout → auto-release" safe.
 
 ---
 
-## 6. Waitlist Auto-Assignment & Time-Limited Offers
+## 7. Waitlist Auto-Assignment & Time-Limited Offers
 
 1. **Join**: a customer can only join the waitlist for a `(show, category)`
-   pair that has zero available seats — enforced server-side, not just in
-   the UI (`joinWaitlist` in `waitlist.controller.js`).
-2. **On cancellation**: `cancelBooking` frees each seat and calls
+   pair with zero available seats — enforced server-side.
+2. **On cancellation**: each freed seat calls
    `offerSeatToNextInWaitlist(showId, categoryId, seatId)`, which:
-   - Locks the oldest `waiting` entry for that show+category with
-     `SELECT ... FOR UPDATE` (so two simultaneous cancellations can't both
-     offer the same waitlist slot to different people),
+   - Locks the oldest `waiting` entry with `SELECT ... FOR UPDATE`
    - Puts the seat into `status='held'` with `held_by` = the waitlisted
      customer and `held_until` = now + `WAITLIST_OFFER_TTL_MINUTES` — **the
-     offer *is* a hold**, so the seat can't be grabbed by a walk-in browsing
-     the seat map while the offer is pending,
-   - Generates a random 48-byte `offer_token`, stores it on the
-     `waitlist_entries` row, and emails a claim link:
-     `{APP_BASE_URL}/waitlist/offer/{token}`.
-3. **Claim**: hitting that link (`claimOffer`) converts the held seat
-   directly into a confirmed booking, provided `offer_expires_at` hasn't
-   passed — same QR + email flow as a normal checkout.
-4. **If the offer times out**: `waitlistOffer.job.js` runs every minute,
-   finds `offered` entries past `offer_expires_at`, marks them `expired`,
-   and calls the *same* `offerSeatToNextInWaitlist` function again — the
-   seat cascades to the next person in line automatically, with no manual
-   intervention. If the queue is empty, the seat is simply released back to
-   `available`.
-
-If a seat is cancelled and nobody is on the waitlist for that category, it's
-released back to `available` immediately.
+     offer itself is implemented as a hold**, reusing the same
+     concurrency-safe primitive from §6
+   - Emails a claim link: `{APP_BASE_URL}/waitlist/offer/{token}`
+3. **Claim**: the link converts the held seat directly into a confirmed
+   booking, provided the offer hasn't expired.
+4. **If the offer times out**: `waitlistOffer.job.js` (runs every minute)
+   marks it `expired` and re-offers the same seat to the next person in
+   line automatically — cascading until claimed or the queue is empty, at
+   which point the seat is released back to `available`.
 
 ---
 
-## 7. QR Code & Email Delivery
+## 8. QR Code & Email Delivery
 
-- `qr.service.js` encodes `{ ref: bookingRef, type: 'ticket' }` as a QR
-  (not the full booking payload — venue staff scan and look up the booking
-  server-side, keeping the QR small and avoiding leaking seat/customer data).
-- `email.service.js` sends the confirmation email with the QR embedded
-  inline via a `cid:` attachment (renders in the email body, not just as a
-  downloadable attachment) using Nodemailer over SMTP — works with any
-  free-tier provider (Gmail app password, Mailtrap, Brevo, Resend, etc.).
-- Email sending is **best-effort and non-blocking**: it's fired after the
+- QR encodes `{ ref: bookingRef, type: 'ticket' }` — venue staff scan and
+  look up the booking server-side, keeping the payload small and avoiding
+  leaking seat/customer data in a scannable code.
+- Confirmation emails embed the QR inline via a `cid:` attachment using
+  Nodemailer over SMTP.
+- Email sending is **best-effort and non-blocking** — fired after the
   booking transaction has already committed, so a flaky SMTP connection
-  never causes a successful booking to fail or roll back.
+  never rolls back a successful booking.
 
 ---
 
-## 8. API Reference (all routes prefixed `/api`)
+## 9. API Reference (all routes prefixed `/api`)
 
 | Method | Route | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/register` | – | `{name, email, password, role?}` → customer/organiser only |
+| POST | `/auth/send-otp` | – | `{email}` → sends a 6-digit verification code, required before register |
+| POST | `/auth/register` | – | `{name, email, password, role?, otp}` → customer/organiser only, otp required |
 | POST | `/auth/login` | – | `{email, password}` → `{user, token}` |
-| GET  | `/auth/me` | ✅ | Current user profile |
+| GET | `/auth/me` | ✅ | Current user profile |
 | POST | `/venues` | admin | Create venue + seat categories + auto-generated seat grid |
-| GET  | `/venues` / `/venues/:id` | – | List / inspect venues |
+| GET | `/venues`, `/venues/:id` | – | List / inspect venues |
+| DELETE | `/venues/:id` | admin | Delete a venue (blocked if it has ever hosted a show) |
 | POST | `/events` | organiser | Create an event listing |
+| DELETE | `/events/:eventId` | organiser | Delete an event (blocked if any booking, confirmed or cancelled, exists) |
 | POST | `/events/:eventId/shows` | organiser | Create a show (venue+date+time+pricing), materializes `show_seats` |
-| GET  | `/events` | – | Browse/filter events (`?type=`, `?title=`) |
-| GET  | `/events/:eventId/shows` | – | Shows for an event |
-| GET  | `/shows/:showId/seats` | – | Full seat map with live status |
+| GET | `/events` | – | Browse/filter events (`?type=`, `?title=`) |
+| GET | `/events/:eventId/shows` | – | Shows for an event |
+| GET | `/shows/:showId/seats` | – | Full seat map with live status |
 | POST | `/shows/:showId/hold` | customer | `{seatIds[]}` — atomic CAS hold with TTL |
 | POST | `/shows/:showId/release` | customer | `{seatIds[]}` — explicit release (abandon checkout) |
 | POST | `/shows/:showId/checkout` | customer | `{seatIds[]}` → confirmed booking + QR + email |
 | POST | `/shows/:showId/waitlist` | customer | `{categoryId}` — join waitlist (only if sold out) |
-| GET  | `/bookings` | customer | Booking history |
+| GET | `/bookings` | customer | Booking history |
 | POST | `/bookings/:id/cancel` | customer | Cancel → triggers waitlist offer or release |
-| GET  | `/waitlist` | customer | My waitlist entries |
-| GET  | `/waitlist/offer/:token` | customer | Claim a time-limited waitlist offer |
-| GET  | `/organiser/events` / `/organiser/summary` | organiser | Bookings & revenue per event/show |
+| GET | `/waitlist` | customer | My waitlist entries |
+| GET | `/waitlist/offer/:token` | customer | Claim a time-limited waitlist offer |
+| GET | `/organiser/events`, `/organiser/summary` | organiser | Bookings & revenue per event/show |
 
 **Socket.io event:** clients `emit('join_show', showId)` after loading a seat
-map and receive `seat_update` events (`{showId, seats: [{show_seat_id, status}]}`)
-whenever a hold, checkout, cancellation, or TTL expiry changes any seat on
-that show — this is what keeps the seat grid live across browser tabs without
-polling.
+map and receive `seat_update` events whenever a hold, checkout,
+cancellation, or TTL expiry changes any seat on that show.
 
 ---
 
-## 9. How this was built & tested
+## 10. How this was built & tested
 
-The full stack was built and exercised against a **real local PostgreSQL
-instance** (not mocked) during development:
-- `npm install` on both backend and frontend completed cleanly.
-- Every backend file passed `node --check` (syntax validation) and `npm run build` succeeded on the frontend.
-- The schema was applied via `npm run migrate` against a live database.
-- An end-to-end scripted test exercised: registration across all three
-  roles → venue/event/show creation → **two simultaneous hold requests for
-  the same seat (only one ever succeeds)** → checkout → QR generation →
+Built and exercised against a real local PostgreSQL instance during
+development, then against Neon in production:
+- `npm install` clean on both backend and frontend; every backend file
+  passed `node --check`; `npm run build` succeeded on the frontend
+- Schema applied via `npm run migrate` against a live database
+- An end-to-end scripted test covered: registration across all three roles
+  → venue/event/show creation → **two simultaneous hold requests for the
+  same seat (only one ever succeeds)** → checkout → QR generation →
   sell-out → waitlist join → booking cancellation → **automatic waitlist
   offer generation** → offer claim via token → organiser revenue summary
-  (verified against known ground-truth numbers) → hold TTL visible in the
-  live seat map.
-- Two real bugs were caught and fixed in this process: Postgres rejects
-  `FOR UPDATE` combined with a `LEFT JOIN` (checkout/claim queries were
+  (verified against known ground-truth numbers) → hold TTL visible live in
+  the seat map
+- Two real bugs were caught and fixed during this process: Postgres
+  rejects `FOR UPDATE` combined with a `LEFT JOIN` (checkout/claim queries
   restructured to lock the base table only), and the organiser summary
-  query had a join fan-out that inflated seat/revenue counts (fixed with
-  pre-aggregated subqueries).
-
-For your own run: after `npm run migrate`, start the backend and frontend
-per §2, register an organiser + a couple of customer accounts, promote one
-user to `admin` via the SQL above, create a venue, an event, and a show, and
-walk through the booking flow in two browser tabs to see the real-time seat
-map and the concurrency protection yourself.
+  query had a join fan-out inflating seat/revenue counts (fixed with
+  pre-aggregated subqueries)
 
 ---
 
-## 10. Deployment Notes
+## 11. Email Verification (OTP) & Delete Features
 
-- **Backend**: deploy to Render/Railway (Node web service) with a managed
-  Postgres add-on; set all `backend/.env` vars in the platform's dashboard;
-  run `npm run migrate` once via a one-off shell/job after first deploy.
-- **Frontend**: deploy to Vercel/Netlify/Render as a static build
-  (`npm run build` → `dist/`); set `VITE_API_URL`/`VITE_SOCKET_URL` to the
-  deployed backend URL.
-- Remember to set `CLIENT_ORIGIN` on the backend to the deployed frontend's
-  origin so CORS and Socket.io both work in production.
+**Registration is now two-step, gated by a real email:**
+1. `POST /api/auth/send-otp {email}` — validates format, confirms the email
+   isn't already registered, generates a 6-digit code (bcrypt-hashed
+   before storage, never stored in plaintext), and emails it. A per-email
+   60-second resend cooldown and a 5-wrong-attempts lockout prevent abuse;
+   `express-rate-limit` also caps how many OTP requests one IP can make.
+2. `POST /api/auth/register {..., otp}` — the account is only created if
+   the submitted code matches, hasn't expired (10 min TTL), and hasn't
+   already been consumed. Every OTP is single-use.
+
+**If you already deployed before this feature existed:** your live
+database needs the new `otp_verifications` table added. Run
+`backend/src/db/migrations/002_add_otp_verifications.sql` against it —
+either paste it into Neon's SQL Editor and run, or run it from your local
+machine with `DATABASE_URL` pointed at your live database. It only adds a
+table; it does not touch any existing data.
+
+**Delete events (organiser) / delete venues (admin)** — both are guarded,
+not unconditional:
+- `DELETE /api/venues/:id` — blocked if the venue has ever hosted a show
+  (past or upcoming)
+- `DELETE /api/events/:eventId` — blocked if **any** booking exists on any
+  of its shows, confirmed *or* cancelled. A cancelled booking is still a
+  real historical/financial record, so it isn't erased by deleting the
+  event around it — only events with zero booking activity can be
+  hard-deleted.
+
+Both return a clear `409` error explaining exactly why deletion was
+blocked, rather than a raw database error or a silent failure.
 
 ---
 
-## 11. Known Limitations / Possible Extensions
+## 12. Known Limitations / Possible Extensions
 
 - No payment gateway integration — `checkout` confirms the booking
   directly (a real system would authorize payment before flipping seats to
-  `booked`, then confirm/rollback based on the payment result).
+  `booked`, then confirm/rollback based on the payment result)
 - Seat map layout is a simple rectangular grid; irregular venue shapes
-  (curved rows, aisles, boxes) would need a richer `venue_seats` schema.
-- No admin UI for managing existing venues beyond creation (edit/delete
-  omitted for scope).
+  (curved rows, aisles, boxes) would need a richer `venue_seats` schema
+- No admin UI for editing/deleting existing venues, only creation
+- Render's free tier sleeps after inactivity, causing a cold-start delay
+  on the first request after idle periods — a paid tier or an alternative
+  host (Railway, Fly.io) would remove this
+- Password reset uses no verification flow yet — could reuse the same OTP
+  mechanism built for registration
+- No `helmet` middleware for standard security headers (CSP, HSTS, etc.)
+- Deletes are hard deletes; a soft-delete (`archived` flag) would let
+  organisers/admins hide an item without permanently destroying it

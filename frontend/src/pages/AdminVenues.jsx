@@ -39,6 +39,19 @@ export default function AdminVenues() {
     }
   }
 
+  async function handleDelete(venueId, venueName) {
+    setError('');
+    setSuccess('');
+    if (!confirm(`Delete "${venueName}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/venues/${venueId}`);
+      setSuccess('Venue deleted.');
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete venue');
+    }
+  }
+
   return (
     <div className="container">
       <h2>Admin: Venue Management</h2>
@@ -82,6 +95,7 @@ export default function AdminVenues() {
             <div style={{ fontWeight: 600 }}>{v.name}</div>
             <div style={{ color: '#9aa0ab', fontSize: '0.85rem' }}>{v.address}</div>
             <div style={{ fontSize: '0.85rem', marginTop: 6 }}>{v.rows} rows × {v.cols} seats</div>
+            <button className="btn danger" style={{ marginTop: 10 }} onClick={() => handleDelete(v.id, v.name)}>Delete</button>
           </div>
         ))}
       </div>
